@@ -2,11 +2,12 @@ import logging
 from typing import Optional, List
 import os
 import yt_dlp
-from litellm import completion
+from litellm import completion, completion_cost
 from litellm.types.utils import ModelResponse
 
 from DeepInfraAudioClient import DeepInfraAudioClient, Segment
 from SRTFile import SRTFile, TimeCode, SubtitleEntry
+from main import VideoInfo
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,8 @@ class YouTubeService:
         self.deepinfra_api_key = deepinfra_api_key
         self.gemini_pro_api_key = gemini_pro_api_key
 
-    def download_audio(self, youtube_link: str, keep_original: bool = True) -> str:
+    @staticmethod
+    def download(youtube_link: str, keep_original: bool = True) -> VideoInfo:
         """
         Downloads the audio from a YouTube video using yt-dlp.
 
@@ -96,73 +98,69 @@ class YouTubeService:
 
     def summarize_video(self, video_info: 'VideoInfo', target_language: str) -> Optional[str]:
         """Summarizes the transcription using the Gemini Pro API via LiteLLM."""
-        try:
-            system_prompt = f"""
-            You are an AI assistant tasked with summarizing a given text and translating the summary into a specified target language in Markdown format. Follow these steps carefully:
-            """
+        system_prompt = f"""
+        You are an AI assistant tasked with summarizing a given text and translating the summary into a specified target language in Markdown format. Follow these steps carefully:
+        """
 
-            user_prompt = f"""
+        user_prompt = f"""
 
-            Title:        
-            <title>
-            {video_info.title}
-            </title>
+        Title:        
+        <title>
+        {video_info.title}
+        </title>
 
-            <description>
-            {video_info.description}
-            </description>
+        <description>
+        {video_info.description}
+        </description>
 
-            1. Read and analyze the following transcription:
-            <transcription>
-            {video_info.transcriptionOrig}
-            </transcription>
+        1. Read and analyze the following transcription:
+        <transcription>
+        {video_info.transcriptionOrig}
+        </transcription>
 
-            2. Read and analyze the following chapters:
-            <chapters>
-            {video_info.chapters}
-            </chapters>
+        2. Read and analyze the following chapters:
+        <chapters>
+        {video_info.chapters}
+        </chapters>
 
-            3. The target language for translation is:
-            <target_language>
-            {target_language}
-            </target_language>
+        3. The target language for translation is:
+        <target_language>
+        {target_language}
+        </target_language>
 
-            3. Create a concise summary of the main points and key ideas from the transcription. Your summary should:
-               - Capture the essential information
-               - Maintain the core message and important details
-               - Exclude minor or irrelevant information
+        4. Create a concise summary of the main points and key ideas from the transcription. Your summary should:
+           - Capture the essential information
+           - Maintain the core message and important details
+           - Exclude minor or irrelevant information
 
-            4. Translate your summary into the target language. Ensure that your translation:
-               - Accurately conveys the meaning of the summary
-               - Is culturally appropriate and natural-sounding in the target language
+        5. Translate your summary into the target language. Ensure that your translation:
+           - Accurately conveys the meaning of the summary
+           - Is culturally appropriate and natural-sounding in the target language
 
-            5. Present your translated summary in Markdown format, enclosed within <summary> tags. The entire summary should be in the target language.
+        6. Present your translated summary in Markdown format, enclosed within <summary> tags. The entire summary should be in the target language.
 
-            Remember to focus on clarity and conciseness in your summary, and accuracy in your translation. Do not include any text in the original language in your final output.
-            """
+        Remember to focus on clarity and conciseness in your summary, and accuracy in your translation. Do not include any text in the original language in your final output.
+        """
 
-            summary_response: ModelResponse = completion(
-                model="gemini/gemini-1.5-pro-002",
-                api_key=self.gemini_pro_api_key,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-            )
-            tokens_used = summary_response.usage.total_tokens
-            prompt_tokens = summary_response.usage.prompt_tokens
-            completion_tokens = summary_response.usage.completion_tokens
-            cost = completion_cost(completion_response=summary_response)
+        summary_response: ModelResponse = completion(
+            model="gemini/gemini-1.5-pro-002",
+            api_key=self.gemini_pro_api_key,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+        )
+        tokens_used = summary_response.usage.total_tokens
+        prompt_tokens = summary_response.usage.prompt_tokens
+        completion_tokens = summary_response.usage.completion_tokens
+        cost = completion_cost(completion_response=summary_response)
 
-            logger.debug(
-                f"Response cost: ${cost}, Total tokens: {tokens_used}, Prompt tokens: {prompt_tokens}, Completion tokens: {completion_tokens}")
+        logger.debug(
+            f"Response cost: ${cost}, Total tokens: {tokens_used}, Prompt tokens: {prompt_tokens}, Completion tokens: {completion_tokens}")
 
-            summary = self.extract_summary(summary_response.choices[0].message.content)
+        summary = self.extract_summary(summary_response.choices[0].message.content)
 
-            return summary
-        except Exception as e:
-            logger.error(f"Error during summarization: {e}")
-            return None
+        return summary
 
     @staticmethod
     def extract_summary(content: str) -> str:
