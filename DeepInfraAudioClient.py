@@ -1,5 +1,5 @@
 import os
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 from enum import Enum
 import requests
 from pydantic import BaseModel, Field, HttpUrl
@@ -58,11 +58,11 @@ class DeepInfraAudioClientError(Exception):
     """Custom exception for DeepInfraAudioClient errors"""
 
 class DeepInfraAudioClient:
-    BASE_URL = "https://api.deepinfra.com/v1/inference/openai/whisper-large-v3-turbo"
+    BASE_URL: str = "https://api.deepinfra.com/v1/inference/openai/whisper-large-v3-turbo"
 
     def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.session = requests.Session()
+        self.api_key: str = api_key
+        self.session: requests.Session = requests.Session()
         self.session.headers.update({"Authorization": f"bearer {api_key}"})
 
     def transcribe(
@@ -96,12 +96,12 @@ class DeepInfraAudioClient:
             DeepInfraAudioClientError: If there's an error during the API request or processing.
         """
         try:
-            files = self._prepare_audio_file(audio_file)
-            data = self._prepare_request_data(
+            files: Dict[str, Union[str, bytes]] = self._prepare_audio_file(audio_file)
+            data: Dict[str, Union[str, float, int]] = self._prepare_request_data(
                 task, initial_prompt, temperature, language, chunk_level, chunk_length_s, webhook
             )
 
-            response = self.session.post(self.BASE_URL, files=files, data=data)
+            response: requests.Response = self.session.post(self.BASE_URL, files=files, data=data)
             response.raise_for_status()
 
             return AutomaticSpeechRecognitionOut(**response.json())
@@ -110,7 +110,7 @@ class DeepInfraAudioClient:
         except Exception as e:
             raise DeepInfraAudioClientError(f"Unexpected error: {str(e)}") from e
 
-    def _prepare_audio_file(self, audio_file: Union[str, bytes]) -> dict:
+    def _prepare_audio_file(self, audio_file: Union[str, bytes]) -> Dict[str, Union[str, bytes]]:
         if isinstance(audio_file, str):
             if not os.path.isfile(audio_file):
                 raise DeepInfraAudioClientError(f"Audio file not found: {audio_file}")
@@ -129,8 +129,8 @@ class DeepInfraAudioClient:
         chunk_level: ChunkLevel,
         chunk_length_s: int,
         webhook: Optional[HttpUrl]
-    ) -> dict:
-        data = {
+    ) -> Dict[str, Union[str, float, int]]:
+        data: Dict[str, Union[str, float, int]] = {
             "task": task.value,
             "temperature": temperature,
             "chunk_level": chunk_level.value,
