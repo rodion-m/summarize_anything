@@ -23,7 +23,7 @@ class YouTubeService:
 
         :param youtube_link: URL of the YouTube video
         :param keep_original: If True, keeps the original audio format if it's WebM
-        :return: Path to the downloaded file
+        :return: VideoInfo object containing information about the downloaded video
         """
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -54,18 +54,28 @@ class YouTubeService:
             logger.info(f"Video title: {video.get('title', '')}")
 
             if os.path.isfile(filename):
-                return filename
+                return VideoInfo(
+                    yt_dlp_info=video,
+                    id=id,
+                    title=video.get('title', ''),
+                    description=video.get('description', ''),
+                    filename=filename,
+                    ext=ext,
+                    chapters=video.get('chapters', [])
+                )
             else:
                 raise FileNotFoundError("Audio file not found.")
 
-    def transcribe_audio(self, audio_file: str) -> str:
+    def transcribe_audio(self, video_info: VideoInfo) -> VideoInfo:
         """Transcribes the audio file using the DeepInfra API (Whisper large turbo model) via LiteLLM."""
         client = DeepInfraAudioClient(api_key=self.deepinfra_api_key)
-        initial_prompt = self.generate_initial_prompt(audio_file)
-        response = client.transcribe(audio_file, initial_prompt=initial_prompt)
+        initial_prompt = self.generate_initial_prompt(video_info.filename)
+        response = client.transcribe(video_info.filename, initial_prompt=initial_prompt)
         logger.info(f"Segments count: {len(response.segments)}")
         logger.info(f"Transcription cost: ${response.inference_status.cost}, Input tokens: {response.inference_status.tokens_input}, Output tokens: {response.inference_status.tokens_generated}, Runtime: {response.inference_status.runtime_ms} ms")
-        return response.text
+        video_info.transcription_orig = response.text
+        video_info.transcription_by_segments = response.segments
+        return video_info
 
     def generate_initial_prompt(self, audio_file: str) -> str:
         """Generates an initial prompt for the Whisper model using Gemini."""

@@ -30,20 +30,18 @@ def main():
     language = input("Enter the target language for the summary (e.g., English): ")
 
     try:
-        audio_file = youtube_service.download(youtube_link)
+        video_info = youtube_service.download(youtube_link)
         logger.info("Audio downloaded successfully. Starting transcription...")
 
-        video_info = youtube_service.transcribe_audio(audio_file)
+        video_info = youtube_service.transcribe_audio(video_info)
 
-        if video_info:
-            logger.info("Transcription complete. Creating VideoInfo...")
-
-            logger.info("Starting summarization...")
+        if video_info.transcription_orig:
+            logger.info("Transcription complete. Starting summarization...")
             summary = youtube_service.summarize_video(video_info, target_language=language)
 
             if summary:
                 logger.info("Summarization complete. Saving to files...")
-                youtube_service.save_to_file(video_info, "transcription.txt")
+                youtube_service.save_to_file(video_info.transcription_orig, "transcription.txt")
                 youtube_service.save_to_file(summary, "summary.md")
                 logger.info("Files saved successfully.")
             else:
