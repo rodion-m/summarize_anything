@@ -5,3 +5,4 @@ python-dotenv~=1.0.1
 requests~=2.32.3
 pydantic~=2.9.2
 openai~=1.51.2
+pydub~=0.25.1
