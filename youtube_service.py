@@ -299,13 +299,41 @@ Remember to focus on clarity, conciseness, and accuracy in your summary and tran
         except Exception as e:
             logger.error(f"Error saving to file: {e}")
 
+    def _segments_to_srt(self, segments: List[Segment]) -> str:
+        """Converts transcription segments to SRT format."""
+        srt_file = SRTFile()
+        
+        for idx, segment in enumerate(segments, 1):
+            start_time = TimeCode(
+                hours=int(segment.start) // 3600,
+                minutes=(int(segment.start) % 3600) // 60,
+                seconds=int(segment.start) % 60,
+                milliseconds=int((segment.start % 1) * 1000)
+            )
+            end_time = TimeCode(
+                hours=int(segment.end) // 3600,
+                minutes=(int(segment.end) % 3600) // 60,
+                seconds=int(segment.end) % 60,
+                milliseconds=int((segment.end % 1) * 1000)
+            )
+            
+            srt_file.add_subtitle(idx, start_time, end_time, [segment.text])
+            
+        return str(srt_file)
+
     def save_transcription_and_summary(self, video_info: VideoInfo, summary: str) -> None:
         """Saves the transcription and summary to files with the video ID in the filename."""
         transcription_filename = f"{video_info.id}_transcription.txt"
         summary_filename = f"{video_info.id}_summary.md"
+        srt_filename = f"{video_info.id}_transcription.srt"
 
         self.save_to_file(video_info.transcription_orig, transcription_filename)
         self.save_to_file(summary, summary_filename)
+        
+        if video_info.transcription_by_segments:
+            srt_content = self._segments_to_srt(video_info.transcription_by_segments)
+            self.save_to_file(srt_content, srt_filename)
+            logger.info(f"SRT transcription saved to {srt_filename}")
 
         logger.info(f"Transcription saved to {transcription_filename}")
         logger.info(f"Summary saved to {summary_filename}")
