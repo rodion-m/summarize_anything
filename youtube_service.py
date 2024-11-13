@@ -7,14 +7,28 @@ from litellm.types.utils import ModelResponse
 
 from DeepInfraAudioClient import DeepInfraAudioClient, Segment
 from SRTFile import SRTFile, TimeCode, SubtitleEntry
-from main import VideoInfo
+from VideoInfo import VideoInfo
 
 logger = logging.getLogger(__name__)
+
+def extract_prompt(content: str):
+    """
+        # Extract the prompt from the content that starts with:
+        ```xml
+        <prompt>
+    """
+    prompt_start = content.find("<prompt>")
+    if prompt_start == -1:
+        return content
+    prompt_end = content.find("</prompt>")
+    return content[prompt_start + len("<prompt>"):prompt_end].strip()
+
 
 class YouTubeService:
     def __init__(self, deepinfra_api_key: str, gemini_pro_api_key: str):
         self.deepinfra_api_key = deepinfra_api_key
         self.gemini_pro_api_key = gemini_pro_api_key
+        self.SUMMARY_MODEL = "gemini/gemini-1.5-flash-002"
 
     @staticmethod
     def download(youtube_link: str, keep_original: bool = True) -> VideoInfo:
@@ -57,10 +71,11 @@ class YouTubeService:
                 return VideoInfo(
                     yt_dlp_info=video,
                     id=id,
-                    title=video.get('title', ''),
+                    title=video.get('fulltitle', video.get('title', '')),
                     description=video.get('description', ''),
                     filename=filename,
                     ext=ext,
+                    language=video.get('language', ''),
                     chapters=video.get('chapters', [])
                 )
             else:
@@ -69,28 +84,52 @@ class YouTubeService:
     def transcribe_audio(self, video_info: VideoInfo) -> VideoInfo:
         """Transcribes the audio file using the DeepInfra API (Whisper large turbo model) via LiteLLM."""
         client = DeepInfraAudioClient(api_key=self.deepinfra_api_key)
-        initial_prompt = self.generate_initial_prompt(video_info.filename)
-        response = client.transcribe(video_info.filename, initial_prompt=initial_prompt)
+        initial_prompt = '' # self.generate_initial_prompt(video_info)
+        # Gemini Pro costs $0.001875 per second
+        response = client.transcribe(video_info.filename, language=video_info.language, initial_prompt=initial_prompt)
         logger.info(f"Segments count: {len(response.segments)}")
         logger.info(f"Transcription cost: ${response.inference_status.cost}, Input tokens: {response.inference_status.tokens_input}, Output tokens: {response.inference_status.tokens_generated}, Runtime: {response.inference_status.runtime_ms} ms")
         video_info.transcription_orig = response.text
         video_info.transcription_by_segments = response.segments
         return video_info
 
-    def generate_initial_prompt(self, audio_file: str) -> str:
+    def generate_initial_prompt(self, video_info: VideoInfo) -> str:
         """Generates an initial prompt for the Whisper model using Gemini."""
-        system_prompt = """
-        You are an AI assistant tasked with generating an initial prompt for a speech recognition model. 
-        The prompt should provide context and guidance to improve the accuracy of the transcription. 
-        Consider the following aspects:
-        1. The likely content based on the file name
-        2. Potential technical terms or jargon that might be used
-        3. The structure of typical content in this domain (e.g., lectures, interviews, presentations)
-        
-        Your prompt should be concise but informative, helping the model to better understand the context of the audio it's about to transcribe.
-        """
+        # https: // cookbook.openai.com / examples / whisper_prompting_guide
 
-        user_prompt = f"Generate an initial prompt for a speech recognition model that's about to transcribe an audio file named '{audio_file}'."
+        language = video_info.language
+        if language is None:
+            language = "English"
+
+        system_prompt = f"""
+You are an AI assistant tasked with generating an initial prompt for a speech recognition model. Your goal is to create a prompt that will provide context and guidance to improve the accuracy of the transcription for a given video. Follow these instructions carefully:
+
+1. You will be provided with the following information:
+   <video_name>{video_info.title}</video_name>
+   <video_description>{video_info.description}</video_description>
+   <language>{language}</language>
+
+2. Based on the video name and description, generate a prompt that will help improve the accuracy of the transcription. The prompt should be no longer than 150 tokens (around 100 words).
+
+3. Ensure that the prompt is written entirely in the language specified in the <language> variable.
+
+4. When creating the prompt, follow these best practices:
+   a. Provide contextual information about the video, such as the topic, speakers, or type of content.
+   b. Include relevant terminology, proper nouns, or technical terms that may appear in the video.
+   c. Use proper capitalization, punctuation, and formatting to guide the model's output style.
+   d. Keep the prompt concise and focused on providing stylistic guidance and context.
+   e. If applicable, include common filler words or speech patterns that may be present in the video.
+
+5. Do not include instructions or commands in the prompt, as the speech recognition model will not execute them.
+
+6. Avoid including specific timestamps or references to video duration in the prompt.
+
+7. Write your generated prompt inside <prompt> tags.
+
+Remember, the goal is to create a prompt that will help the speech recognition model produce a more accurate transcription by providing context and stylistic guidance relevant to the video content.
+"""
+
+        user_prompt = f"Generate an initial prompt."
 
         try:
             response: ModelResponse = completion(
@@ -100,8 +139,16 @@ class YouTubeService:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
+                max_completion_tokens=150
             )
-            return response.choices[0].message.content
+            response_prompt = extract_prompt(response.choices[0].message.content)
+
+            words = response_prompt.split()
+            if len(words) > 100:
+                logger.warning(f"Initial prompt is longer than 100 words. Truncating to 100 words.")
+                response_prompt = " ".join(words[:100])
+
+            return response_prompt
         except Exception as e:
             logger.error(f"Error generating initial prompt: {e}")
             return ""
@@ -109,51 +156,97 @@ class YouTubeService:
     def summarize_video(self, video_info: 'VideoInfo', target_language: str) -> Optional[str]:
         """Summarizes the transcription using the Gemini Pro API via LiteLLM."""
         system_prompt = f"""
-        You are an AI assistant tasked with summarizing a given text and translating the summary into a specified target language in Markdown format. Follow these steps carefully:
+        You are an AI assistant specialized in summarizing and translating video content.
         """
 
         user_prompt = f"""
+        You are an AI assistant specialized in summarizing and translating video content. Your task is to create a detailed, insightful summary of a video and translate it into a specified target language.
 
-        Title:        
-        <title>
-        {video_info.title}
-        </title>
+First, let's examine the video information:
 
-        <description>
-        {video_info.description}
-        </description>
+<video_transcription>
+{video_info.transcription_orig}
+</video_transcription>
 
-        1. Read and analyze the following transcription:
-        <transcription>
-        {video_info.transcriptionOrig}
-        </transcription>
+<video_title>
+{video_info.title}
+</video_title>
 
-        2. Read and analyze the following chapters:
-        <chapters>
-        {video_info.chapters}
-        </chapters>
+<video_description>
+{video_info.description}
+</video_description>
 
-        3. The target language for translation is:
-        <target_language>
-        {target_language}
-        </target_language>
+<video_chapters>
+{video_info.chapters}
+</video_chapters>
 
-        4. Create a concise summary of the main points and key ideas from the transcription. Your summary should:
-           - Capture the essential information
-           - Maintain the core message and important details
-           - Exclude minor or irrelevant information
+The target language for translation is:
+<target_language>
+{target_language}
+</target_language>
 
-        5. Translate your summary into the target language. Ensure that your translation:
-           - Accurately conveys the meaning of the summary
-           - Is culturally appropriate and natural-sounding in the target language
+Now, please follow these steps carefully:
 
-        6. Present your translated summary in Markdown format, enclosed within <summary> tags. The entire summary should be in the target language.
+1. Analyze the video information provided above.
 
-        Remember to focus on clarity and conciseness in your summary, and accuracy in your translation. Do not include any text in the original language in your final output.
+2. Create a detailed summary of the video content. Wrap your thought process in <analysis> tags:
+   <analysis>
+   - Identify the main topics discussed in the video
+   - List key insights and non-obvious ideas presented
+   - Note any important facts, figures, or examples
+   - Consider the overall structure and flow of the content
+   - Determine which elements are essential and which can be omitted
+   - Identify the target audience of the video
+   - Note any cultural references or context that may need adaptation for the target language
+   - List any technical terms or jargon that may require special attention in translation
+   - Consider how the video's tone and style should be reflected in the summary
+   </analysis>
+
+3. Based on your analysis, write a comprehensive summary that:
+   - Captures the essential information and main points
+   - Highlights the topics discussed, key insights, and non-obvious ideas
+   - Maintains the core message and important details
+   - Excludes minor or irrelevant information
+   - Is structured in a way that a knowledgeable person would summarize the content
+
+4. Translate your summary into the target language. Ensure that your translation:
+   - Accurately conveys the meaning of the summary
+   - Is culturally appropriate and natural-sounding in the target language
+   - Maintains the structure and emphasis of the original summary
+   - Appropriately adapts any cultural references or context
+   - Accurately translates technical terms and jargon, providing explanations if necessary
+
+5. Present your translated summary in Markdown format, enclosed within <summary> tags. The entire summary should be in the target language.
+
+Here's an example of how your output should be structured (using English as a placeholder):
+
+<summary>
+# Video Summary: [Translated Title]
+
+## Main Topics
+- Topic 1
+- Topic 2
+- Topic 3
+
+## Key Insights
+- Insight 1
+- Insight 2
+- Insight 3
+
+## Non-obvious Ideas
+- Idea 1
+- Idea 2
+
+## Detailed Summary
+[Your translated, detailed summary goes here, using appropriate Markdown formatting for headings, bullet points, emphasis, etc.]
+
+</summary>
+
+Remember to focus on clarity, conciseness, and accuracy in your summary and translation. Do not include any text in the original language in your final output.
         """
 
         summary_response: ModelResponse = completion(
-            model="gemini/gemini-1.5-pro-002",
+            model=self.SUMMARY_MODEL,
             api_key=self.gemini_pro_api_key,
             messages=[
                 {"role": "system", "content": system_prompt},
