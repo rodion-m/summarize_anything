@@ -8,6 +8,7 @@ from litellm.types.utils import ModelResponse
 from DeepInfraAudioClient import DeepInfraAudioClient, Segment
 from SRTFile import SRTFile, TimeCode, SubtitleEntry
 from VideoInfo import VideoInfo
+from database import TranscriptionDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class YouTubeService:
         self.deepinfra_api_key = deepinfra_api_key
         self.gemini_pro_api_key = gemini_pro_api_key
         self.SUMMARY_MODEL = "gemini/gemini-1.5-flash-002"
+        self.db = TranscriptionDatabase()
 
     @staticmethod
     def download(youtube_link: str, keep_original: bool = True) -> VideoInfo:
@@ -83,6 +85,12 @@ class YouTubeService:
 
     def transcribe_audio(self, video_info: VideoInfo) -> VideoInfo:
         """Transcribes the audio file using the DeepInfra API (Whisper large turbo model) via LiteLLM."""
+        cached_transcription = self.db.get_transcription(video_info.id)
+        if cached_transcription:
+            logger.info("Using cached transcription")
+            video_info.transcription_orig = cached_transcription
+            return video_info
+
         client = DeepInfraAudioClient(api_key=self.deepinfra_api_key)
         initial_prompt = '' # self.generate_initial_prompt(video_info)
         # Gemini Pro costs $0.001875 per second
@@ -91,6 +99,10 @@ class YouTubeService:
         logger.info(f"Transcription cost: ${response.inference_status.cost}, Input tokens: {response.inference_status.tokens_input}, Output tokens: {response.inference_status.tokens_generated}, Runtime: {response.inference_status.runtime_ms} ms")
         video_info.transcription_orig = response.text
         video_info.transcription_by_segments = response.segments
+
+        # Cache the transcription
+        self.db.save_transcription(video_info.id, video_info.transcription_orig, video_info.language)
+
         return video_info
 
     def generate_initial_prompt(self, video_info: VideoInfo) -> str:
@@ -282,3 +294,14 @@ Remember to focus on clarity, conciseness, and accuracy in your summary and tran
                 f.write(text)
         except Exception as e:
             logger.error(f"Error saving to file: {e}")
+
+    def save_transcription_and_summary(self, video_info: VideoInfo, summary: str) -> None:
+        """Saves the transcription and summary to files with the video ID in the filename."""
+        transcription_filename = f"{video_info.id}_transcription.txt"
+        summary_filename = f"{video_info.id}_summary.md"
+
+        self.save_to_file(video_info.transcription_orig, transcription_filename)
+        self.save_to_file(summary, summary_filename)
+
+        logger.info(f"Transcription saved to {transcription_filename}")
+        logger.info(f"Summary saved to {summary_filename}")

@@ -41,8 +41,7 @@ def main():
 
             if summary:
                 logger.info("Summarization complete. Saving to files...")
-                youtube_service.save_to_file(video_info.transcription_orig, "transcription.txt")
-                youtube_service.save_to_file(summary, "summary.md")
+                youtube_service.save_transcription_and_summary(video_info, summary)
                 logger.info("Files saved successfully.")
             else:
                 logger.info("Summarization failed.")
