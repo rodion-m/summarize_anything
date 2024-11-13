@@ -1,9 +1,9 @@
 import logging
-from typing import Optional, List
 import os
+
 from dotenv import load_dotenv
+
 from youtube_service import YouTubeService
-from DeepInfraAudioClient import Segment
 
 load_dotenv()
 
@@ -31,7 +31,7 @@ def main():
 
     try:
         video_info = youtube_service.download(youtube_link)
-        logger.info("Audio downloaded successfully. Starting transcription...")
+        logger.info("Audio downloaded successfully")
 
         video_info = youtube_service.transcribe_audio(video_info)
 

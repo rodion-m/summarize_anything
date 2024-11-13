@@ -106,7 +106,7 @@ class DeepInfraAudioClient:
 
             return AutomaticSpeechRecognitionOut(**response.json())
         except requests.RequestException as e:
-            raise DeepInfraAudioClientError(f"Error during API request: {str(e)}") from e
+            raise DeepInfraAudioClientError(f"Error during API request: {str(e)}, response: {e.response.text}") from e
         except Exception as e:
             raise DeepInfraAudioClientError(f"Unexpected error: {str(e)}") from e
 
@@ -114,7 +114,8 @@ class DeepInfraAudioClient:
         if isinstance(audio_file, str):
             if not os.path.isfile(audio_file):
                 raise DeepInfraAudioClientError(f"Audio file not found: {audio_file}")
-            return {"audio": open(audio_file, "rb")}
+            with open(audio_file, "rb") as file:
+                return {"audio": file.read()}
         elif isinstance(audio_file, bytes):
             return {"audio": audio_file}
         else:

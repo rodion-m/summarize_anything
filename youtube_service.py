@@ -25,6 +25,29 @@ def extract_prompt(content: str):
     return content[prompt_start + len("<prompt>"):prompt_end].strip()
 
 
+def _segments_to_srt(segments: List[Segment]) -> str:
+    """Converts transcription segments to SRT format."""
+    srt_file = SRTFile()
+
+    for idx, segment in enumerate(segments, 1):
+        start_time = TimeCode(
+            hours=int(segment.start) // 3600,
+            minutes=(int(segment.start) % 3600) // 60,
+            seconds=int(segment.start) % 60,
+            milliseconds=int((segment.start % 1) * 1000)
+        )
+        end_time = TimeCode(
+            hours=int(segment.end) // 3600,
+            minutes=(int(segment.end) % 3600) // 60,
+            seconds=int(segment.end) % 60,
+            milliseconds=int((segment.end % 1) * 1000)
+        )
+
+        srt_file.add_subtitle(idx, start_time, end_time, [segment.text])
+
+    return str(srt_file)
+
+
 class YouTubeService:
     def __init__(self, deepinfra_api_key: str, gemini_pro_api_key: str):
         self.deepinfra_api_key = deepinfra_api_key
@@ -95,8 +118,9 @@ class YouTubeService:
             return video_info
 
         client = DeepInfraAudioClient(api_key=self.deepinfra_api_key)
-        initial_prompt = '' # self.generate_initial_prompt(video_info)
+        initial_prompt = f'Name: {video_info.title}' # self.generate_initial_prompt(video_info)
         # Gemini Pro costs $0.001875 per second
+        logger.debug(f"Transcribing audio file: {video_info.filename}")
         response = client.transcribe(video_info.filename, language=video_info.language, initial_prompt=initial_prompt)
         logger.info(f"Segments count: {len(response.segments)}")
         logger.info(f"Transcription cost: ${response.inference_status.cost}, Input tokens: {response.inference_status.tokens_input}, Output tokens: {response.inference_status.tokens_generated}, Runtime: {response.inference_status.runtime_ms} ms")
@@ -299,28 +323,6 @@ Remember to focus on clarity, conciseness, and accuracy in your summary and tran
         except Exception as e:
             logger.error(f"Error saving to file: {e}")
 
-    def _segments_to_srt(self, segments: List[Segment]) -> str:
-        """Converts transcription segments to SRT format."""
-        srt_file = SRTFile()
-        
-        for idx, segment in enumerate(segments, 1):
-            start_time = TimeCode(
-                hours=int(segment.start) // 3600,
-                minutes=(int(segment.start) % 3600) // 60,
-                seconds=int(segment.start) % 60,
-                milliseconds=int((segment.start % 1) * 1000)
-            )
-            end_time = TimeCode(
-                hours=int(segment.end) // 3600,
-                minutes=(int(segment.end) % 3600) // 60,
-                seconds=int(segment.end) % 60,
-                milliseconds=int((segment.end % 1) * 1000)
-            )
-            
-            srt_file.add_subtitle(idx, start_time, end_time, [segment.text])
-            
-        return str(srt_file)
-
     def save_transcription_and_summary(self, video_info: VideoInfo, summary: str) -> None:
         """Saves the transcription and summary to files with the video ID in the filename."""
         transcription_filename = f"{video_info.id}_transcription.txt"
@@ -331,7 +333,7 @@ Remember to focus on clarity, conciseness, and accuracy in your summary and tran
         self.save_to_file(summary, summary_filename)
         
         if video_info.transcription_by_segments:
-            srt_content = self._segments_to_srt(video_info.transcription_by_segments)
+            srt_content = _segments_to_srt(video_info.transcription_by_segments)
             self.save_to_file(srt_content, srt_filename)
             logger.info(f"SRT transcription saved to {srt_filename}")
 
