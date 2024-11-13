@@ -85,10 +85,13 @@ class YouTubeService:
 
     def transcribe_audio(self, video_info: VideoInfo) -> VideoInfo:
         """Transcribes the audio file using the DeepInfra API (Whisper large turbo model) via LiteLLM."""
-        cached_transcription = self.db.get_transcription(video_info.id)
-        if cached_transcription:
+        cached_result = self.db.get_transcription(video_info.id)
+        if cached_result:
             logger.info("Using cached transcription")
-            video_info.transcription_orig = cached_transcription
+            transcription, language, segments_json = cached_result
+            video_info.transcription_orig = transcription
+            video_info.language = language
+            video_info.transcription_by_segments = [Segment(**segment) for segment in eval(segments_json)]
             return video_info
 
         client = DeepInfraAudioClient(api_key=self.deepinfra_api_key)
@@ -100,8 +103,9 @@ class YouTubeService:
         video_info.transcription_orig = response.text
         video_info.transcription_by_segments = response.segments
 
-        # Cache the transcription
-        self.db.save_transcription(video_info.id, video_info.transcription_orig, video_info.language)
+        # Cache the transcription and segments
+        segments_json = str([segment.dict() for segment in response.segments])
+        self.db.save_transcription(video_info.id, video_info.transcription_orig, video_info.language, segments_json)
 
         return video_info
 

@@ -12,24 +12,25 @@ class TranscriptionDatabase:
             CREATE TABLE IF NOT EXISTS transcriptions (
                 video_id TEXT PRIMARY KEY,
                 transcription TEXT,
-                language TEXT
+                language TEXT,
+                segments TEXT
             )
         ''')
         self.conn.commit()
 
-    def save_transcription(self, video_id: str, transcription: str, language: str):
+    def save_transcription(self, video_id: str, transcription: str, language: str, segments: str):
         cursor = self.conn.cursor()
         cursor.execute('''
-            INSERT OR REPLACE INTO transcriptions (video_id, transcription, language)
-            VALUES (?, ?, ?)
-        ''', (video_id, transcription, language))
+            INSERT OR REPLACE INTO transcriptions (video_id, transcription, language, segments)
+            VALUES (?, ?, ?, ?)
+        ''', (video_id, transcription, language, segments))
         self.conn.commit()
 
-    def get_transcription(self, video_id: str) -> Optional[str]:
+    def get_transcription(self, video_id: str) -> Optional[tuple[str, str, str]]:
         cursor = self.conn.cursor()
-        cursor.execute('SELECT transcription FROM transcriptions WHERE video_id = ?', (video_id,))
+        cursor.execute('SELECT transcription, language, segments FROM transcriptions WHERE video_id = ?', (video_id,))
         result = cursor.fetchone()
-        return result[0] if result else None
+        return result if result else None
 
     def close(self):
         self.conn.close()
