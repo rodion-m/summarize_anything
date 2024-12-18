@@ -16,7 +16,7 @@ import requests
 import webvtt
 import yt_dlp
 from dotenv import load_dotenv
-from litellm import completion, completion_cost, openrouter_key
+from litellm import completion, completion_cost
 from litellm.types.utils import ModelResponse
 from pydantic import BaseModel, HttpUrl
 from weasyprint import HTML
@@ -28,9 +28,11 @@ load_dotenv()
 
 # Replace with your actual DeepInfra and Gemini Pro API keys
 deepinfra_api_key = os.environ.get("DEEPINFRA_API_KEY")
-gemini_pro_api_key = os.environ.get("GEMINI_PRO_API_KEY")
-openrouter_key = os.environ.get("OPENROUTER_KEY")
-LLM_ID = "openrouter/openai/o1"
+openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+INITIAL_PROMPT_MODEL_ID = "openrouter/openai/gpt-4o"
+SUMMARY_MODEL_ID = "openrouter/openai/o1-mini"
+
+# gemini_pro_api_key = os.environ.get("GEMINI_PRO_API_KEY")
 
 # Setup logging
 logging.basicConfig(
@@ -473,7 +475,6 @@ def _segments_to_srt(segments: List[Segment]) -> str:
 class YouTubeService:
     def __init__(self, use_subtitles_from_youtube: bool = False):
         self.USE_SUBTITLES_FROM_YOUTUBE = use_subtitles_from_youtube
-        self.SUMMARY_MODEL = "gemini/gemini-1.5-flash-002"
         self.db = TranscriptionDatabase()
 
     @staticmethod
@@ -704,8 +705,8 @@ Remember, the goal is to create a prompt that will help the speech recognition m
 
         try:
             response: ModelResponse = completion(
-                model="gemini/gemini-1.5-pro-002",
-                api_key=gemini_pro_api_key,
+                model=INITIAL_PROMPT_MODEL_ID,
+                api_key=openrouter_key,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -823,8 +824,8 @@ Remember to focus on clarity, conciseness, and accuracy in your summary and tran
 
         try:
             response: ModelResponse = completion(
-                model=self.SUMMARY_MODEL,
-                api_key=gemini_pro_api_key,
+                model=SUMMARY_MODEL_ID,
+                api_key=openrouter_key,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -906,7 +907,7 @@ def main():
     group.add_argument('--youtube', type=str, help="YouTube video URL to process")
     group.add_argument('--srt', type=str, help="Path to an existing SRT file to process")
 
-    parser.add_argument('--use-subtitles', action='store_true', help="Use subtitles from YouTube if available")
+    parser.add_argument('--use-subtitles', action='store_true', help="Use subtitles from YouTube if available", default=True)
     parser.add_argument('--target-language', type=str, required=True,
                         help="Target language for the summary (e.g., English)")
     parser.add_argument('--output-dir', type=str, default='output', help="Directory to save output files")

@@ -1,4 +1,4 @@
-litellm==1.49.2
+litellm==1.55.3
 yt-dlp==2024.10.7
 dotenv
 python-dotenv~=1.0.1
