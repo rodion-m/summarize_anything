@@ -1,5 +1,6 @@
 litellm==1.55.3
 yt-dlp==2024.10.7
+argparse
 dotenv
 python-dotenv~=1.0.1
 requests~=2.32.3
