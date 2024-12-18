@@ -1,8 +1,8 @@
 import logging
 import os
-import sys
 import time
 from typing import List
+
 from dotenv import load_dotenv
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
@@ -12,7 +12,7 @@ load_dotenv()
 MAX_CHUNK_SIZE_MB = int(os.getenv("MAX_CHUNK_SIZE_MB", 25))
 MAX_CHUNK_DURATION_SEC = int(os.getenv("MAX_CHUNK_DURATION_SEC", 30))
 INITIAL_MIN_SILENCE_LEN_MS = int(os.getenv("INITIAL_MIN_SILENCE_LEN_MS", 3000))
-MIN_SILENCE_LEN_STEP = int(os.getenv("MIN_SILENCE_LEN_STEP", 100))
+MIN_SILENCE_LEN_STEP_PERCENT = int(os.getenv("MIN_SILENCE_LEN_STEP", 0.1)) # 10% of initial min_silence_len
 
 # Create a logger
 logger = logging.getLogger()
@@ -62,8 +62,8 @@ class AudioChunksSplitter:
 
         # check if any chunk has duration greater than max_duration and call split_large_chunks recursively
         if largest_chunk.duration_seconds > max_duration:
-            return AudioChunksSplitter.split_large_chunks(small_chunks, max_duration,
-                                                          min_silence_len - MIN_SILENCE_LEN_STEP)
+            new_min_silence_len = min_silence_len - MIN_SILENCE_LEN_STEP_PERCENT * min_silence_len
+            return AudioChunksSplitter.split_large_chunks(small_chunks, max_duration, new_min_silence_len)
 
         return small_chunks
 
@@ -74,6 +74,11 @@ class AudioChunksSplitter:
         audio = AudioSegment.from_file(file_path)
         logging.info(f"Audio file loaded in {time.time() - start_time:.2f} seconds")
         logging.info(f"Audio duration: {audio.duration_seconds} seconds")
+
+        # if audio duration is less than max_duration, return the audio as is
+        if audio.duration_seconds <= MAX_CHUNK_DURATION_SEC:
+            logging.info("Audio duration is less than max_duration. No need to split.")
+            return [audio]
 
         logging.info("Splitting audio on silence...")
         start_time = time.time()

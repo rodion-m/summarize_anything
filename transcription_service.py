@@ -1,9 +1,11 @@
+# transcription_service.py
+
 import logging
 from typing import List, Optional
-import time
+
 import backoff
 
-from DeepInfraAudioClient import DeepInfraAudioClient, AutomaticSpeechRecognitionOut, Segment
+from DeepInfraAudioClient import DeepInfraAudioClient, AutomaticSpeechRecognitionOut
 from audio_splitter import AudioChunksSplitter
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ class TranscriptionService:
         """Transcribe a single audio chunk with retries"""
         return self.client.transcribe(audio_chunk, language=language, initial_prompt=initial_prompt)
 
-    def transcribe_audio_file(self, audio_file: str, language: Optional[str] = None, initial_prompt: Optional[str] = None) -> AutomaticSpeechRecognitionOut:
+    def transcribe_audio_file_splitted(self, audio_file: str, language: Optional[str] = None, initial_prompt: Optional[str] = None) -> AutomaticSpeechRecognitionOut:
         """Split audio file into chunks and transcribe each chunk"""
         # Split audio into chunks
         chunks = AudioChunksSplitter.load_and_chunk_audio(audio_file)
@@ -78,3 +80,9 @@ class TranscriptionService:
                     combined.segments.extend([segment])
                     
         return combined
+
+
+    def transcribe_audio(self, audio_file: str, language: Optional[str] = None, initial_prompt: Optional[str] = None) -> AutomaticSpeechRecognitionOut:
+        """Transcribes the audio file using the DeepInfra API (Whisper large turbo model) via LiteLLM."""
+        response = self.client.transcribe(audio_file, language=language, initial_prompt=initial_prompt)
+        return response

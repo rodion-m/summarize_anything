@@ -1,3 +1,5 @@
+# youtube_service.h
+
 import logging
 from typing import Optional, List
 import os
@@ -119,14 +121,22 @@ class YouTubeService:
             return video_info
 
         transcription_service = TranscriptionService(api_key=self.deepinfra_api_key)
-        initial_prompt = f'Name: {video_info.title}' # self.generate_initial_prompt(video_info)
+        initial_prompt = f'' # self.generate_initial_prompt(video_info)
         # Gemini Pro costs $0.001875 per second
         logger.debug(f"Transcribing audio file: {video_info.filename}")
-        response = transcription_service.transcribe_audio_file(
-            video_info.filename,
-            language=video_info.language,
-            initial_prompt=initial_prompt
-        )
+        SPLIT_AUDIO = False
+        if SPLIT_AUDIO:
+            response = transcription_service.transcribe_audio_file_splitted(
+                video_info.filename,
+                language=video_info.language,
+                initial_prompt=initial_prompt
+            )
+        else:
+            response = transcription_service.transcribe_audio(
+                video_info.filename,
+                language=video_info.language,
+                initial_prompt=initial_prompt
+            )
         logger.info(f"Segments count: {len(response.segments)}")
         logger.info(f"Transcription cost: ${response.inference_status.cost}, Input tokens: {response.inference_status.tokens_input}, Output tokens: {response.inference_status.tokens_generated}, Runtime: {response.inference_status.runtime_ms} ms")
         video_info.transcription_orig = response.text
