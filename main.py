@@ -30,7 +30,7 @@ load_dotenv()
 deepinfra_api_key = os.environ.get("DEEPINFRA_API_KEY")
 openrouter_key = os.environ.get("OPENROUTER_API_KEY")
 INITIAL_PROMPT_MODEL_ID = "openrouter/openai/gpt-4o"
-SUMMARY_MODEL_ID = "openrouter/openai/o1-mini"
+SUMMARY_MODEL_ID = "openrouter/openai/o1-mini" # or "o1" for huge files/videos
 
 # gemini_pro_api_key = os.environ.get("GEMINI_PRO_API_KEY")
 
