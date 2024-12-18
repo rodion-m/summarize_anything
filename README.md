@@ -121,11 +121,6 @@ DeepInfra: https://deepinfra.com/dash/api_keys
 
 1. **Clone the Repository**
 
-   ```bash
-   git clone https://github.com/yourusername/youtube-transcription-summarization.git
-   cd youtube-transcription-summarization
-   ```
-
 2. **Create a Virtual Environment**
 
    It's recommended to use a virtual environment to manage dependencies.
@@ -190,7 +185,7 @@ The tool can be used to process YouTube videos or existing SRT/VTT files. Below 
 3. **Example**
 
    ```bash
-   python main.py --youtube "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --target-language "Spanish" --output-dir "results"
+   python main.py --youtube "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --target-language "Russian" --output-dir "results"
    ```
 
 ### Process an Existing SRT File
