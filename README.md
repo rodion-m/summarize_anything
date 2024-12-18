@@ -103,23 +103,19 @@ If no errors are reported, the libraries are correctly installed.
 
 ### 2. Python Environment
 
-Ensure you have Python 3.8 or higher installed. You can check your Python version with:
+Ensure you have Python 3.1 or higher installed. You can check your Python version with:
 
 ```bash
 python3 --version
 ```
 
-If you need to install or update Python, consider using [pyenv](https://github.com/pyenv/pyenv):
-
-```bash
-brew install pyenv
-pyenv install 3.10.9
-pyenv global 3.10.9
-```
-
 ### 3. API Keys
 
 This tool requires API keys for DeepInfra and OpenRouter. Obtain your API keys from their respective platforms and store them securely.
+
+OpenRouter: https://openrouter.ai/settings/keys
+
+DeepInfra: https://deepinfra.com/dash/api_keys
 
 ## Installation
 
